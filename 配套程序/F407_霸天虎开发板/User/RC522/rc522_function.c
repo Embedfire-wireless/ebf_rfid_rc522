@@ -4,7 +4,7 @@
 #include "bsp_SysTick.h"
 
 
-#define   RC522_DELAY()  Delay_us ( 200 )
+#define   RC522_DELAY()  Delay_us ( 2 )
 
  /**
   * @brief  向RC522发送1 Byte 数据
@@ -669,29 +669,68 @@ char PcdHalt( void )
   return MI_OK;	
 }
 
-
-void IC_CMT ( uint8_t * UID,
-              uint8_t * KEY,
-              uint8_t RW,
-              uint8_t * Dat )
+/////////////////////////////////////////////////////////////////////
+//功    能：写入钱包金额
+//参数说明: ucAddr[IN]：块地址
+//          pData：写入的金额
+//返    回: 成功返回MI_OK
+/////////////////////////////////////////////////////////////////////
+char WriteAmount( uint8_t ucAddr, uint32_t pData )
 {
-  uint8_t ucArray_ID [ 4 ] = { 0 }; //先后存放IC卡的类型和UID(IC卡序列号)
-  
+	char status;
+	uint8_t ucComMF522Buf[16];
+	ucComMF522Buf[0] = (pData&((uint32_t)0x000000ff));
+	ucComMF522Buf[1] = (pData&((uint32_t)0x0000ff00))>>8;
+	ucComMF522Buf[2] = (pData&((uint32_t)0x00ff0000))>>16;
+	ucComMF522Buf[3] = (pData&((uint32_t)0xff000000))>>24;	
 	
-  PcdRequest ( 0x52, ucArray_ID ); //寻卡
-
-  PcdAnticoll ( ucArray_ID );      //防冲撞
-  
-  PcdSelect ( UID );               //选定卡
-  
-  PcdAuthState ( 0x60, 0x10, KEY, UID );//校验
+	ucComMF522Buf[4] = ~(pData&((uint32_t)0x000000ff));
+	ucComMF522Buf[5] = ~(pData&((uint32_t)0x0000ff00))>>8;
+	ucComMF522Buf[6] = ~(pData&((uint32_t)0x00ff0000))>>16;
+	ucComMF522Buf[7] = ~(pData&((uint32_t)0xff000000))>>24;	
 	
+	ucComMF522Buf[8] = (pData&((uint32_t)0x000000ff));
+	ucComMF522Buf[9] = (pData&((uint32_t)0x0000ff00))>>8;
+	ucComMF522Buf[10] = (pData&((uint32_t)0x00ff0000))>>16;
+	ucComMF522Buf[11] = (pData&((uint32_t)0xff000000))>>24;	
+	
+	ucComMF522Buf[12] = ucAddr;
+	ucComMF522Buf[13] = ~ucAddr;
+	ucComMF522Buf[14] = ucAddr;
+	ucComMF522Buf[15] = ~ucAddr;
+  status = PcdWrite(ucAddr,ucComMF522Buf);
+	return status;
+}
 
-	if ( RW )                        //读写选择，1是读，0是写
-    PcdRead ( 0x10, Dat );
-   
-   else 
-     PcdWrite ( 0x10, Dat );
-   	 
-   PcdHalt ();	 
+/////////////////////////////////////////////////////////////////////
+//功    能：读取钱包金额
+//参数说明: ucAddr[IN]：块地址
+//          *pData：读出的金额
+//返    回: 成功返回MI_OK
+/////////////////////////////////////////////////////////////////////
+char ReadAmount( uint8_t ucAddr, uint32_t *pData )
+{
+	
+	char status = MI_ERR;
+	uint8_t j;
+	uint8_t ucComMF522Buf[16];
+  status = PcdRead(ucAddr,ucComMF522Buf);
+	if(status != MI_OK)
+		return status;
+	for(j=0;j<4;j++)
+	{
+		if((ucComMF522Buf[j] != ucComMF522Buf[j+8]) && (ucComMF522Buf[j] != ~ucComMF522Buf[j+4]))//验证一下是不是钱包的数据
+		break;
+	}
+	if(j == 4)
+	{
+		  status = MI_OK;
+			*pData = ucComMF522Buf[0] + (ucComMF522Buf[1]<<8) + (ucComMF522Buf[2]<<16) + (ucComMF522Buf[3]<<24);
+	}
+	else
+	{
+		status = MI_ERR;
+		*pData = 0;
+	}
+  return status;	
 }

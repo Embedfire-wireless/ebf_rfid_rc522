@@ -27,47 +27,47 @@
   * @param  无
   * @retval 无
   */
+uint8_t KeyValue[]={0xFF ,0xFF, 0xFF, 0xFF, 0xFF, 0xFF};   // 卡A密钥
 void IC_test ( void )
 {
+	uint32_t writeValue = 100;
+	uint32_t readValue;
 	char cStr [ 30 ];
-  u8 ucArray_ID [ 4 ];  /*先后存放IC卡的类型和UID(IC卡序列号)*/                                                                                           
-	u8 ucStatusReturn;    /*返回状态*/                                                                                         
-  static u8 ucLineCount = 0; 
-
+  uint8_t ucArray_ID [ 4 ];    /*先后存放IC卡的类型和UID(IC卡序列号)*/                                                                                         
+	uint8_t ucStatusReturn;      /*返回状态*/                                                                                           
   while ( 1 )
-  { 
+  {    
     /*寻卡*/
-		if ( ( ucStatusReturn = PcdRequest ( PICC_REQALL, ucArray_ID ) ) != MI_OK )  
-      /*若失败再次寻卡*/
-			ucStatusReturn = PcdRequest ( PICC_REQALL, ucArray_ID );		                                                 
+		if ( ( ucStatusReturn = PcdRequest ( PICC_REQIDL, ucArray_ID ) ) != MI_OK )  
+       /*若失败再次寻卡*/
+			ucStatusReturn = PcdRequest ( PICC_REQIDL, ucArray_ID );		                                                
 
 		if ( ucStatusReturn == MI_OK  )
 		{
       /*防冲撞（当有多张卡进入读写器操作范围时，防冲突机制会从其中选择一张进行操作）*/
 			if ( PcdAnticoll ( ucArray_ID ) == MI_OK )                                                                   
 			{
-				sprintf ( cStr, "The Card ID is: %02X%02X%02X%02X",
-                  ucArray_ID [ 0 ], 
-                  ucArray_ID [ 1 ], 
-                  ucArray_ID [ 2 ], 
-                  ucArray_ID [ 3 ] );
-				
-				printf ( "%s\r\n",cStr ); 
-				
-				if ( ucLineCount == 0 )
-				  ILI9341_Clear ( 0, 0, 240, 271, macBACKGROUND);	
-				
-				ILI9341_DispString_EN ( 0, ucLineCount * 16, cStr,
-                                macBACKGROUND, macBLUE );
-				
-				ucLineCount ++;
-				
-				if ( ucLineCount == 17 ) ucLineCount = 0;				
-			}		
+				PcdSelect(ucArray_ID);			
+		
+				PcdAuthState( PICC_AUTHENT1A, 0x11, KeyValue, ucArray_ID );//校验密码 
+        WriteAmount(0x11,writeValue); //写入金额
+        if(ReadAmount(0x11,&readValue) == MI_OK)	//读取金额
+				{		
+					writeValue +=100;
+				  sprintf ( cStr, "The Card ID is: %02X%02X%02X%02X",ucArray_ID [0], ucArray_ID [1], ucArray_ID [2],ucArray_ID [3] );
+					printf ( "%s\r\n",cStr );  //打印卡片ID
+          ILI9341_DispString_EN ( 0, 0, cStr, macBACKGROUND, macYELLOW );
+					
+					printf ("余额为：%d\r\n",readValue);
+					sprintf ( cStr, "TThe residual amount: %d", readValue);				 										 	         
+					ILI9341_DispString_EN ( 0, 16, cStr, macBACKGROUND, macYELLOW );
+          PcdHalt();
+				}				
+			}				
 		}		
+		    
   }	
 }
-
 /**
   * @brief  主函数
   * @param  无
